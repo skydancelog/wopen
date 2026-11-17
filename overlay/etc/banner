@@ -1,0 +1,8 @@
+ _________________________________________________________________
+|                                                                 |
+|  Xiaomi Mi Router CR6608 - OpenWrt custom build                  |
+|  Version: @VERSION@   Profile: @PROFILE@                         |
+|  Built with official OpenWrt ImageBuilder.                      |
+|  Default settings are applied once by /etc/uci-defaults/99-*.   |
+|_________________________________________________________________|
+

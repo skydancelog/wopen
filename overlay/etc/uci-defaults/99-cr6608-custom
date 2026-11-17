@@ -1,0 +1,71 @@
+#!/bin/sh
+# CR6608 定制固件首次启动配置（由 build.sh 生成，仅执行一次）
+# 修改这里只会影响“首启”写入的 UCI 配置，不会覆盖后续用户改动。
+
+ROOT_HASH=@ROOT_HASH@
+LAN_IP=@LAN_IP@
+HOST_NAME=@HOST_NAME@
+WIFI_2G_SSID=@WIFI_2G_SSID@
+WIFI_5G_SSID=@WIFI_5G_SSID@
+WIFI_KEY=@WIFI_PASSWORD@
+LUCI_LANG=@LUCI_LANG@
+LUCI_THEME_PATH=@LUCI_THEME_PATH@
+
+# root 密码：只替换 shadow 中 root 的哈希字段，保留其他账户与锁定状态
+if [ -n "$ROOT_HASH" ] && [ -f /etc/shadow ]; then
+	sed -i "s|^root:[^:]*:|root:$ROOT_HASH:|" /etc/shadow
+fi
+
+# 管理网口 IP
+if uci -q get network.lan >/dev/null 2>&1; then
+	uci set network.lan.ipaddr="$LAN_IP"
+	uci set network.lan.netmask="255.255.255.0"
+fi
+uci commit network
+
+# 主机名与时区
+if uci -q get "system.@system[0]" >/dev/null 2>&1; then
+	uci set "system.@system[0].hostname=$HOST_NAME"
+	uci set "system.@system[0].timezone=CST-8"
+	uci set "system.@system[0].zonename=Asia/Shanghai"
+fi
+uci commit system
+
+# Flow Offload：TurboACC 前端使用的底层开关（软件流卸载，不启用闭源硬件 HNAT）
+if uci -q get "firewall.@defaults[0]" >/dev/null 2>&1; then
+	uci set "firewall.@defaults[0].flow_offloading=1"
+	uci set "firewall.@defaults[0].flow_offloading_hw=0"
+fi
+uci commit firewall
+
+# LuCI 语言与主题
+if uci -q get luci.main >/dev/null 2>&1; then
+	uci set luci.main.lang="$LUCI_LANG"
+	[ -n "$LUCI_THEME_PATH" ] && uci set luci.main.mediaurlbase="$LUCI_THEME_PATH"
+fi
+uci commit luci
+
+# 无线：开启双频，设置 SSID / WPA2-PSK 密码，国家代码 CN
+for radio in radio0 radio1; do
+	if uci -q get "wireless.$radio" >/dev/null 2>&1; then
+		uci set "wireless.$radio.disabled=0"
+		uci set "wireless.$radio.country=CN"
+	fi
+done
+
+if [ -n "$(uci -q get wireless.default_radio0 2>/dev/null)" ]; then
+	uci set wireless.default_radio0.ssid="$WIFI_2G_SSID"
+	uci set wireless.default_radio0.key="$WIFI_KEY"
+	uci set wireless.default_radio0.encryption=psk2
+	uci set wireless.default_radio0.disabled=0
+fi
+
+if [ -n "$(uci -q get wireless.default_radio1 2>/dev/null)" ]; then
+	uci set wireless.default_radio1.ssid="$WIFI_5G_SSID"
+	uci set wireless.default_radio1.key="$WIFI_KEY"
+	uci set wireless.default_radio1.encryption=psk2
+	uci set wireless.default_radio1.disabled=0
+fi
+uci commit wireless
+
+exit 0
